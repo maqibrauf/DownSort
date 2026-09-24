@@ -66,13 +66,31 @@ export async function processFile(filePath) {
     return;
   }
 
-  const match = await classifyFile(fileName, folders);
-  if (!match) {
+  let result;
+  try {
+    result = await classifyFile(fileName, folders);
+  } catch (err) {
+    // Defensive: classifyFile shouldn't throw (it catches its own errors), but if it
+    // ever does, treat it the same as a transient failure rather than crashing the watcher.
+    logError(`Unexpected error classifying "${fileName}":`, err.message);
+    result = { status: 'error', reason: err.message };
+  }
+
+  if (result.status === 'error') {
+    // Do NOT mark as seen: a transient failure (network blip, rate limit, timeout)
+    // should be retried on the next run/sweep, not given up on permanently — but we
+    // also don't retry within this run, so a broken API key can't spin in a loop.
+    log(`Could not classify "${fileName}" (${result.reason}), will retry on next run.`);
+    return;
+  }
+
+  if (result.status === 'no-match') {
     log(`No confident match for "${fileName}", leaving in place.`);
     markSeen(filePath, stat.size, stat.mtimeMs, 'no-match');
     return;
   }
 
+  const match = result.folder;
   const decision = await confirmMove(fileName, match.label);
 
   if (decision !== 'accept') {

@@ -1,9 +1,55 @@
 import { config } from './config.js';
 import { logError } from './logger.js';
 
+const MAX_ATTEMPTS = 3;
+const REQUEST_TIMEOUT_MS = 20_000;
+const RETRY_DELAYS_MS = [500, 1500]; // between attempts 1->2 and 2->3
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableStatus(status) {
+  return status === 429 || status >= 500;
+}
+
+async function callDeepSeek(systemPrompt, userPrompt) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(`${config.deepseek.baseUrl}/chat/completions`, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${config.deepseek.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: config.deepseek.model,
+        temperature: 0,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ]
+      })
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 /**
  * Asks the LLM to pick the best-matching folder for a file, from the given taxonomy.
- * Returns { label, absPath } on a confident match, or null if no good match / on error.
+ *
+ * Returns a discriminated result:
+ *   { status: 'match', folder: { label, absPath } }  - confident pick
+ *   { status: 'no-match' }                            - LLM says nothing fits (final answer)
+ *   { status: 'error', reason }                       - API/network/parse failure (transient,
+ *                                                        caller should NOT treat this as "no match"
+ *                                                        and should leave the file for a later run)
+ *
+ * Retries a bounded number of times (only on network errors / 429 / 5xx) with backoff, then
+ * gives up cleanly — it never loops indefinitely or hammers the API.
  */
 export async function classifyFile(fileName, folders) {
   const folderLabels = folders.map((f) => f.label);
@@ -18,37 +64,46 @@ Respond with ONLY a JSON object, no markdown, no explanation: {"folder": "<exact
   const userPrompt = `Filename: ${fileName}\n\nExisting folders:\n${folderLabels.map((l) => `- ${l}`).join('\n')}`;
 
   let response;
-  try {
-    response = await fetch(`${config.deepseek.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${config.deepseek.apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: config.deepseek.model,
-        temperature: 0,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ]
-      })
-    });
-  } catch (err) {
-    logError('DeepSeek request failed:', err.message);
-    return null;
+  let lastError;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      response = await callDeepSeek(systemPrompt, userPrompt);
+    } catch (err) {
+      lastError = err.message;
+      logError(`DeepSeek request failed (attempt ${attempt}/${MAX_ATTEMPTS}):`, lastError);
+      response = null;
+    }
+
+    if (response?.ok) break;
+
+    if (response && !isRetryableStatus(response.status)) {
+      // Non-retryable (bad request, auth failure, etc.) — retrying won't help.
+      const body = await response.text().catch(() => '');
+      logError('DeepSeek returned non-retryable status', response.status, body);
+      return { status: 'error', reason: `http_${response.status}` };
+    }
+
+    if (response) {
+      lastError = `http_${response.status}`;
+      logError(`DeepSeek returned ${response.status} (attempt ${attempt}/${MAX_ATTEMPTS}), will retry if attempts remain.`);
+    }
+
+    if (attempt < MAX_ATTEMPTS) {
+      await sleep(RETRY_DELAYS_MS[attempt - 1] ?? RETRY_DELAYS_MS.at(-1));
+    }
   }
 
-  if (!response.ok) {
-    logError('DeepSeek returned', response.status, await response.text().catch(() => ''));
-    return null;
+  if (!response?.ok) {
+    logError(`Giving up on "${fileName}" after ${MAX_ATTEMPTS} attempts:`, lastError);
+    return { status: 'error', reason: lastError ?? 'unknown' };
   }
 
   const data = await response.json().catch(() => null);
   const content = data?.choices?.[0]?.message?.content;
   if (!content) {
     logError('DeepSeek response had no content:', JSON.stringify(data));
-    return null;
+    return { status: 'error', reason: 'empty_response' };
   }
 
   let parsed;
@@ -57,15 +112,17 @@ Respond with ONLY a JSON object, no markdown, no explanation: {"folder": "<exact
     parsed = JSON.parse(jsonMatch ? jsonMatch[0] : content);
   } catch {
     logError('Could not parse LLM response as JSON:', content);
-    return null;
+    return { status: 'error', reason: 'unparseable_response' };
   }
 
-  if (!parsed.folder) return null;
+  if (!parsed.folder) {
+    return { status: 'no-match' };
+  }
 
   const match = folders.find((f) => f.label === parsed.folder);
   if (!match) {
     logError(`LLM picked a folder not in the list: "${parsed.folder}"`);
-    return null;
+    return { status: 'no-match' };
   }
-  return match;
+  return { status: 'match', folder: match };
 }
