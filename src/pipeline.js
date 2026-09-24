@@ -38,6 +38,7 @@ async function waitForStable(filePath) {
 export async function processFile(filePath) {
   const ext = path.extname(filePath).toLowerCase();
   if (config.ignoredExtensions.includes(ext)) return;
+  if (config.allowedExtensions && !config.allowedExtensions.includes(ext)) return;
 
   let stat;
   try {

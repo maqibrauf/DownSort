@@ -16,6 +16,7 @@
   },
 
   "maxFolderDepth": 4,
+  "allowedExtensions": [".md"],
   "ignoredExtensions": [".crdownload", ".tmp", ".part", ".download"],
   "stableCheckIntervalMs": 1000,
   "stableCheckCount": 2

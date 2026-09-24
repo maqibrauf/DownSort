@@ -83,4 +83,8 @@ moving anything. Nothing is moved without your confirmation.
 - Partial/incomplete downloads (`.crdownload`, `.tmp`, `.part`, `.download`)
   are ignored automatically; add more extensions to `ignoredExtensions` in
   `config.json` if needed.
+- To only process specific file types (e.g. while testing, or to stay well
+  under a free API rate limit), set `allowedExtensions` in `config.json`,
+  e.g. `"allowedExtensions": [".md"]` — everything else is left untouched.
+  Leave it unset to process every file type (except `ignoredExtensions`).
 - Logs from the background process go to `data/run.log`.

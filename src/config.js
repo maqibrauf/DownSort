@@ -56,6 +56,11 @@ export const config = {
     models: Array.isArray(configuredModels) && configuredModels.length > 0 ? configuredModels : DEFAULT_FREE_MODELS
   },
   maxFolderDepth: raw.maxFolderDepth ?? 4,
+  // If set, only files with one of these extensions are processed at all — everything else
+  // is left alone. Leave unset (or null) to process every file except ignoredExtensions.
+  allowedExtensions: Array.isArray(raw.allowedExtensions) && raw.allowedExtensions.length > 0
+    ? raw.allowedExtensions.map((e) => e.toLowerCase())
+    : null,
   ignoredExtensions: raw.ignoredExtensions ?? ['.crdownload', '.tmp', '.part', '.download'],
   stableCheckIntervalMs: raw.stableCheckIntervalMs ?? 1000,
   stableCheckCount: raw.stableCheckCount ?? 2
