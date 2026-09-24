@@ -1,0 +1,17 @@
+{
+  "downloadsPath": "C:\\Users\\barbo\\Downloads",
+
+  "targets": [
+    { "name": "ProjectA", "path": "C:\\Users\\barbo\\projects\\project-a\\docs" }
+  ],
+
+  "openrouter": {
+    "apiKey": "sk-or-...",
+    "model": "deepseek/deepseek-chat-v3.1:free"
+  },
+
+  "maxFolderDepth": 4,
+  "ignoredExtensions": [".crdownload", ".tmp", ".part", ".download"],
+  "stableCheckIntervalMs": 1000,
+  "stableCheckCount": 2
+}

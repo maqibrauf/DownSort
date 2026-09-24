@@ -1,0 +1,18 @@
+{
+  "name": "downsort",
+  "version": "1.0.0",
+  "description": "Watches your Downloads folder and uses a free LLM to suggest where each file should be moved, based on the existing folder structure of your projects.",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "once": "node src/index.js --once"
+  },
+  "dependencies": {
+    "chokidar": "^4.0.1",
+    "node-notifier": "^10.0.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
