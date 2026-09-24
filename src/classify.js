@@ -1,5 +1,5 @@
 import { config } from './config.js';
-import { logError } from './logger.js';
+import { logError, log } from './logger.js';
 
 const MAX_ATTEMPTS = 3;
 const REQUEST_TIMEOUT_MS = 20_000;
@@ -13,7 +13,7 @@ function isRetryableStatus(status) {
   return status === 429 || status >= 500;
 }
 
-async function callOpenRouter(systemPrompt, userPrompt) {
+async function callOpenRouter(model, systemPrompt, userPrompt) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
@@ -25,7 +25,7 @@ async function callOpenRouter(systemPrompt, userPrompt) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: config.openrouter.model,
+        model,
         temperature: 0,
         messages: [
           { role: 'system', content: systemPrompt },
@@ -39,17 +39,62 @@ async function callOpenRouter(systemPrompt, userPrompt) {
 }
 
 /**
+ * Tries a single model with bounded retries (network errors / 429 / 5xx only).
+ * Returns { outcome: 'ok', response } | { outcome: 'model-unavailable' } | { outcome: 'error', reason }
+ */
+async function attemptModel(model, systemPrompt, userPrompt) {
+  let response;
+  let lastError;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      response = await callOpenRouter(model, systemPrompt, userPrompt);
+    } catch (err) {
+      lastError = err.message;
+      logError(`OpenRouter request failed (${model}, attempt ${attempt}/${MAX_ATTEMPTS}):`, lastError);
+      response = null;
+    }
+
+    if (response?.ok) return { outcome: 'ok', response };
+
+    if (response?.status === 404) {
+      // Free-tier models get deprecated/rotated often — move on to the next configured model.
+      const body = await response.text().catch(() => '');
+      log(`Model "${model}" is unavailable (404), trying next configured model. ${body}`);
+      return { outcome: 'model-unavailable' };
+    }
+
+    if (response && !isRetryableStatus(response.status)) {
+      const body = await response.text().catch(() => '');
+      logError('OpenRouter returned non-retryable status', response.status, body);
+      return { outcome: 'error', reason: `http_${response.status}` };
+    }
+
+    if (response) {
+      lastError = `http_${response.status}`;
+      logError(`OpenRouter returned ${response.status} (${model}, attempt ${attempt}/${MAX_ATTEMPTS}), will retry if attempts remain.`);
+    }
+
+    if (attempt < MAX_ATTEMPTS) {
+      await sleep(RETRY_DELAYS_MS[attempt - 1] ?? RETRY_DELAYS_MS.at(-1));
+    }
+  }
+
+  return { outcome: 'error', reason: lastError ?? 'unknown' };
+}
+
+/**
  * Asks the LLM to pick the best-matching folder for a file, from the given taxonomy.
+ * Tries each model in config.openrouter.models in order, moving to the next one whenever
+ * one is deprecated/unavailable-for-free (404), so a single OpenRouter free-tier rotation
+ * doesn't stall the whole pipeline.
  *
  * Returns a discriminated result:
  *   { status: 'match', folder: { label, absPath } }  - confident pick
  *   { status: 'no-match' }                            - LLM says nothing fits (final answer)
- *   { status: 'error', reason }                       - API/network/parse failure (transient,
- *                                                        caller should NOT treat this as "no match"
- *                                                        and should leave the file for a later run)
- *
- * Retries a bounded number of times (only on network errors / 429 / 5xx) with backoff, then
- * gives up cleanly — it never loops indefinitely or hammers the API.
+ *   { status: 'error', reason }                       - every model failed (transient or account-
+ *                                                        level issue); caller should NOT treat this
+ *                                                        as "no match" and should retry a later run
  */
 export async function classifyFile(fileName, folders) {
   const folderLabels = folders.map((f) => f.label);
@@ -63,66 +108,50 @@ Respond with ONLY a JSON object, no markdown, no explanation: {"folder": "<exact
 
   const userPrompt = `Filename: ${fileName}\n\nExisting folders:\n${folderLabels.map((l) => `- ${l}`).join('\n')}`;
 
-  let response;
-  let lastError;
+  let lastReason = 'no_models_configured';
 
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+  for (const model of config.openrouter.models) {
+    const attempt = await attemptModel(model, systemPrompt, userPrompt);
+
+    if (attempt.outcome === 'model-unavailable') {
+      lastReason = 'model_unavailable';
+      continue; // try the next configured model
+    }
+
+    if (attempt.outcome === 'error') {
+      // Non-retryable, model-independent failure (bad API key, malformed request, etc.) —
+      // trying another model won't help, so give up now rather than burning more requests.
+      logError(`Giving up on "${fileName}": ${attempt.reason}`);
+      return { status: 'error', reason: attempt.reason };
+    }
+
+    // outcome === 'ok'
+    const data = await attempt.response.json().catch(() => null);
+    const content = data?.choices?.[0]?.message?.content;
+    if (!content) {
+      logError('OpenRouter response had no content:', JSON.stringify(data));
+      return { status: 'error', reason: 'empty_response' };
+    }
+
+    let parsed;
     try {
-      response = await callOpenRouter(systemPrompt, userPrompt);
-    } catch (err) {
-      lastError = err.message;
-      logError(`OpenRouter request failed (attempt ${attempt}/${MAX_ATTEMPTS}):`, lastError);
-      response = null;
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      parsed = JSON.parse(jsonMatch ? jsonMatch[0] : content);
+    } catch {
+      logError('Could not parse LLM response as JSON:', content);
+      return { status: 'error', reason: 'unparseable_response' };
     }
 
-    if (response?.ok) break;
+    if (!parsed.folder) return { status: 'no-match' };
 
-    if (response && !isRetryableStatus(response.status)) {
-      // Non-retryable (bad request, auth failure, etc.) — retrying won't help.
-      const body = await response.text().catch(() => '');
-      logError('OpenRouter returned non-retryable status', response.status, body);
-      return { status: 'error', reason: `http_${response.status}` };
+    const match = folders.find((f) => f.label === parsed.folder);
+    if (!match) {
+      logError(`LLM picked a folder not in the list: "${parsed.folder}"`);
+      return { status: 'no-match' };
     }
-
-    if (response) {
-      lastError = `http_${response.status}`;
-      logError(`OpenRouter returned ${response.status} (attempt ${attempt}/${MAX_ATTEMPTS}), will retry if attempts remain.`);
-    }
-
-    if (attempt < MAX_ATTEMPTS) {
-      await sleep(RETRY_DELAYS_MS[attempt - 1] ?? RETRY_DELAYS_MS.at(-1));
-    }
+    return { status: 'match', folder: match };
   }
 
-  if (!response?.ok) {
-    logError(`Giving up on "${fileName}" after ${MAX_ATTEMPTS} attempts:`, lastError);
-    return { status: 'error', reason: lastError ?? 'unknown' };
-  }
-
-  const data = await response.json().catch(() => null);
-  const content = data?.choices?.[0]?.message?.content;
-  if (!content) {
-    logError('OpenRouter response had no content:', JSON.stringify(data));
-    return { status: 'error', reason: 'empty_response' };
-  }
-
-  let parsed;
-  try {
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    parsed = JSON.parse(jsonMatch ? jsonMatch[0] : content);
-  } catch {
-    logError('Could not parse LLM response as JSON:', content);
-    return { status: 'error', reason: 'unparseable_response' };
-  }
-
-  if (!parsed.folder) {
-    return { status: 'no-match' };
-  }
-
-  const match = folders.find((f) => f.label === parsed.folder);
-  if (!match) {
-    logError(`LLM picked a folder not in the list: "${parsed.folder}"`);
-    return { status: 'no-match' };
-  }
-  return { status: 'match', folder: match };
+  logError(`Giving up on "${fileName}": all configured models failed (${lastReason}).`);
+  return { status: 'error', reason: lastReason };
 }

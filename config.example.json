@@ -6,7 +6,12 @@
   ],
 
   "openrouter": {
-    "model": "deepseek/deepseek-chat-v3.1:free"
+    "models": [
+      "deepseek/deepseek-chat-v3-0324:free",
+      "deepseek/deepseek-r1:free",
+      "meta-llama/llama-3.3-70b-instruct:free",
+      "qwen/qwen-2.5-72b-instruct:free"
+    ]
   },
 
   "maxFolderDepth": 4,

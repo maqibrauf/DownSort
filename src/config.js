@@ -33,13 +33,26 @@ if (!apiKey) {
   process.exit(1);
 }
 
+// OpenRouter's free-tier model lineup rotates/gets deprecated fairly often. If you hit a
+// "unavailable for free" 404 for all of these, check https://openrouter.ai/models?max_price=0
+// for what's currently live and update this list (or your config.json's "openrouter.models").
+const DEFAULT_FREE_MODELS = [
+  'deepseek/deepseek-chat-v3-0324:free',
+  'deepseek/deepseek-r1:free',
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'qwen/qwen-2.5-72b-instruct:free'
+];
+
+const configuredModels = raw.openrouter?.models ?? (raw.openrouter?.model ? [raw.openrouter.model] : undefined);
+
 export const config = {
   downloadsPath: raw.downloadsPath,
   targets: raw.targets,
   openrouter: {
     apiKey,
     baseUrl: raw.openrouter?.baseUrl || 'https://openrouter.ai/api/v1',
-    model: raw.openrouter?.model || 'deepseek/deepseek-chat-v3.1:free'
+    // Tried in order; if one is deprecated/unavailable-for-free, the next is tried automatically.
+    models: Array.isArray(configuredModels) && configuredModels.length > 0 ? configuredModels : DEFAULT_FREE_MODELS
   },
   maxFolderDepth: raw.maxFolderDepth ?? 4,
   ignoredExtensions: raw.ignoredExtensions ?? ['.crdownload', '.tmp', '.part', '.download'],

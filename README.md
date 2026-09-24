@@ -36,9 +36,12 @@ moving anything. Nothing is moved without your confirmation.
    - `targets`: a list of `{ "name": "...", "path": "..." }` — the project
      folders (e.g. a Next.js project's `docs` folder) you want files sorted
      into. Add as many as you like.
-   - `openrouter.model` (optional): defaults to `deepseek/deepseek-chat-v3.1:free`.
-     If that free model gets rate-limited, swap in another `:free` model from
-     https://openrouter.ai/models?max_price=0.
+   - `openrouter.models` (optional): a list of `:free` model slugs to try in
+     order — defaults to a handful of currently-free ones. OpenRouter
+     deprecates free models fairly often; if a model 404s as "unavailable
+     for free", DownSort automatically moves on to the next one in the list.
+     If they all fail, check https://openrouter.ai/models?max_price=0 for
+     what's currently live and update the list.
 
 4. (Optional) Sweep files already sitting in Downloads:
 
