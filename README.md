@@ -1,7 +1,7 @@
 # DownSort
 
-Watches your Downloads folder. When a new file lands, it asks DeepSeek's
-free-tier LLM which of your existing project folders it belongs in, then
+Watches your Downloads folder. When a new file lands, it asks a free LLM
+(via OpenRouter) which of your existing project folders it belongs in, then
 shows a Windows toast notification with **Accept**/**Reject** buttons before
 moving anything. Nothing is moved without your confirmation.
 
@@ -13,16 +13,18 @@ moving anything. Nothing is moved without your confirmation.
    npm install
    ```
 
-2. Set your DeepSeek API key as a **persistent** environment variable (not
+2. Set your OpenRouter API key as a **persistent** environment variable (not
    just `$env:...` in the current shell — that won't be visible to the
    background task at logon):
 
    ```powershell
-   setx DEEPSEEK_API_KEY "your-key-here"
+   setx OPENROUTER_API_KEY "your-key-here"
    ```
 
    Close and reopen your terminal afterwards so it picks up the new value.
-   Get a free key at https://platform.deepseek.com/api_keys.
+   Get a free key at https://openrouter.ai/keys — the default model
+   (`deepseek/deepseek-chat-v3.1:free`) costs nothing to use, no balance
+   required.
 
 3. Copy the config template and fill it in:
 
@@ -34,7 +36,9 @@ moving anything. Nothing is moved without your confirmation.
    - `targets`: a list of `{ "name": "...", "path": "..." }` — the project
      folders (e.g. a Next.js project's `docs` folder) you want files sorted
      into. Add as many as you like.
-   - `deepseek.model` (optional): defaults to `deepseek-chat`.
+   - `openrouter.model` (optional): defaults to `deepseek/deepseek-chat-v3.1:free`.
+     If that free model gets rate-limited, swap in another `:free` model from
+     https://openrouter.ai/models?max_price=0.
 
 4. (Optional) Sweep files already sitting in Downloads:
 

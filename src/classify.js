@@ -13,19 +13,19 @@ function isRetryableStatus(status) {
   return status === 429 || status >= 500;
 }
 
-async function callDeepSeek(systemPrompt, userPrompt) {
+async function callOpenRouter(systemPrompt, userPrompt) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    return await fetch(`${config.deepseek.baseUrl}/chat/completions`, {
+    return await fetch(`${config.openrouter.baseUrl}/chat/completions`, {
       method: 'POST',
       signal: controller.signal,
       headers: {
-        Authorization: `Bearer ${config.deepseek.apiKey}`,
+        Authorization: `Bearer ${config.openrouter.apiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: config.deepseek.model,
+        model: config.openrouter.model,
         temperature: 0,
         messages: [
           { role: 'system', content: systemPrompt },
@@ -68,10 +68,10 @@ Respond with ONLY a JSON object, no markdown, no explanation: {"folder": "<exact
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
-      response = await callDeepSeek(systemPrompt, userPrompt);
+      response = await callOpenRouter(systemPrompt, userPrompt);
     } catch (err) {
       lastError = err.message;
-      logError(`DeepSeek request failed (attempt ${attempt}/${MAX_ATTEMPTS}):`, lastError);
+      logError(`OpenRouter request failed (attempt ${attempt}/${MAX_ATTEMPTS}):`, lastError);
       response = null;
     }
 
@@ -80,13 +80,13 @@ Respond with ONLY a JSON object, no markdown, no explanation: {"folder": "<exact
     if (response && !isRetryableStatus(response.status)) {
       // Non-retryable (bad request, auth failure, etc.) — retrying won't help.
       const body = await response.text().catch(() => '');
-      logError('DeepSeek returned non-retryable status', response.status, body);
+      logError('OpenRouter returned non-retryable status', response.status, body);
       return { status: 'error', reason: `http_${response.status}` };
     }
 
     if (response) {
       lastError = `http_${response.status}`;
-      logError(`DeepSeek returned ${response.status} (attempt ${attempt}/${MAX_ATTEMPTS}), will retry if attempts remain.`);
+      logError(`OpenRouter returned ${response.status} (attempt ${attempt}/${MAX_ATTEMPTS}), will retry if attempts remain.`);
     }
 
     if (attempt < MAX_ATTEMPTS) {
@@ -102,7 +102,7 @@ Respond with ONLY a JSON object, no markdown, no explanation: {"folder": "<exact
   const data = await response.json().catch(() => null);
   const content = data?.choices?.[0]?.message?.content;
   if (!content) {
-    logError('DeepSeek response had no content:', JSON.stringify(data));
+    logError('OpenRouter response had no content:', JSON.stringify(data));
     return { status: 'error', reason: 'empty_response' };
   }
 

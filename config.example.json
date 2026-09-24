@@ -5,8 +5,8 @@
     { "name": "ProjectA", "path": "C:\\Users\\barbo\\projects\\project-a\\docs" }
   ],
 
-  "deepseek": {
-    "model": "deepseek-chat"
+  "openrouter": {
+    "model": "deepseek/deepseek-chat-v3.1:free"
   },
 
   "maxFolderDepth": 4,

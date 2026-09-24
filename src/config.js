@@ -24,11 +24,11 @@ if (!Array.isArray(raw.targets) || raw.targets.length === 0) {
   );
   process.exit(1);
 }
-const apiKey = process.env.DEEPSEEK_API_KEY;
+const apiKey = process.env.OPENROUTER_API_KEY;
 if (!apiKey) {
   console.error(
-    'Missing DEEPSEEK_API_KEY environment variable. Get a free key at https://platform.deepseek.com/api_keys, ' +
-      'then set it (e.g. `$env:DEEPSEEK_API_KEY = "..."` in PowerShell, or a permanent env var via Task Scheduler).'
+    'Missing OPENROUTER_API_KEY environment variable. Get a free key at https://openrouter.ai/keys, ' +
+      'then set it (e.g. `setx OPENROUTER_API_KEY "..."` in PowerShell, then reopen your terminal).'
   );
   process.exit(1);
 }
@@ -36,10 +36,10 @@ if (!apiKey) {
 export const config = {
   downloadsPath: raw.downloadsPath,
   targets: raw.targets,
-  deepseek: {
+  openrouter: {
     apiKey,
-    baseUrl: raw.deepseek?.baseUrl || 'https://api.deepseek.com',
-    model: raw.deepseek?.model || 'deepseek-chat'
+    baseUrl: raw.openrouter?.baseUrl || 'https://openrouter.ai/api/v1',
+    model: raw.openrouter?.model || 'deepseek/deepseek-chat-v3.1:free'
   },
   maxFolderDepth: raw.maxFolderDepth ?? 4,
   ignoredExtensions: raw.ignoredExtensions ?? ['.crdownload', '.tmp', '.part', '.download'],
