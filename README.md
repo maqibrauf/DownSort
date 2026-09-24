@@ -22,9 +22,8 @@ moving anything. Nothing is moved without your confirmation.
    ```
 
    Close and reopen your terminal afterwards so it picks up the new value.
-   Get a free key at https://openrouter.ai/keys — the default model
-   (`deepseek/deepseek-chat-v3.1:free`) costs nothing to use, no balance
-   required.
+   Get a free key at https://openrouter.ai/keys — the default `:free` models
+   cost nothing to use, no balance required.
 
 3. Copy the config template and fill it in:
 

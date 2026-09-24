@@ -37,10 +37,11 @@ if (!apiKey) {
 // "unavailable for free" 404 for all of these, check https://openrouter.ai/models?max_price=0
 // for what's currently live and update this list (or your config.json's "openrouter.models").
 const DEFAULT_FREE_MODELS = [
-  'deepseek/deepseek-chat-v3-0324:free',
-  'deepseek/deepseek-r1:free',
-  'meta-llama/llama-3.3-70b-instruct:free',
-  'qwen/qwen-2.5-72b-instruct:free'
+  'z-ai/glm-5.2:free',
+  'google/gemma-4-31b-it:free',
+  'nvidia/nemotron-3-super-120b-a12b:free',
+  'qwen/qwen3.8-27b:free',
+  'nex-agi/nex-n2.5-pro:free'
 ];
 
 const configuredModels = raw.openrouter?.models ?? (raw.openrouter?.model ? [raw.openrouter.model] : undefined);
