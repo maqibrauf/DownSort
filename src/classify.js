@@ -10,7 +10,10 @@ function sleep(ms) {
 }
 
 function isRetryableStatus(status) {
-  return status === 429 || status >= 500;
+  // 429 is deliberately excluded: OpenRouter's free tier often runs on a daily quota, not a
+  // per-minute one, so retrying the same model within seconds just burns more of that quota
+  // for no chance of success. Move to the next configured model instead (see attemptModel).
+  return status >= 500;
 }
 
 async function callOpenRouter(model, systemPrompt, userPrompt) {
@@ -39,7 +42,7 @@ async function callOpenRouter(model, systemPrompt, userPrompt) {
 }
 
 /**
- * Tries a single model with bounded retries (network errors / 429 / 5xx only).
+ * Tries a single model with bounded retries (network errors / 5xx only — see isRetryableStatus).
  * Returns { outcome: 'ok', response } | { outcome: 'model-unavailable' } | { outcome: 'error', reason }
  */
 async function attemptModel(model, systemPrompt, userPrompt) {
@@ -61,6 +64,12 @@ async function attemptModel(model, systemPrompt, userPrompt) {
       // Free-tier models get deprecated/rotated often — move on to the next configured model.
       const body = await response.text().catch(() => '');
       log(`Model "${model}" is unavailable (404), trying next configured model. ${body}`);
+      return { outcome: 'model-unavailable' };
+    }
+
+    if (response?.status === 429) {
+      // Move on immediately — no point retrying the same rate-limited model.
+      log(`Model "${model}" is rate-limited (429), trying next configured model.`);
       return { outcome: 'model-unavailable' };
     }
 
