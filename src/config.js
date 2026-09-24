@@ -24,17 +24,22 @@ if (!Array.isArray(raw.targets) || raw.targets.length === 0) {
   );
   process.exit(1);
 }
-if (!raw.openrouter?.apiKey || raw.openrouter.apiKey.startsWith('sk-or-...')) {
-  console.error('config.json: "openrouter.apiKey" is missing. Get a free key at https://openrouter.ai/keys');
+const apiKey = process.env.DEEPSEEK_API_KEY;
+if (!apiKey) {
+  console.error(
+    'Missing DEEPSEEK_API_KEY environment variable. Get a free key at https://platform.deepseek.com/api_keys, ' +
+      'then set it (e.g. `$env:DEEPSEEK_API_KEY = "..."` in PowerShell, or a permanent env var via Task Scheduler).'
+  );
   process.exit(1);
 }
 
 export const config = {
   downloadsPath: raw.downloadsPath,
   targets: raw.targets,
-  openrouter: {
-    apiKey: raw.openrouter.apiKey,
-    model: raw.openrouter.model || 'deepseek/deepseek-chat-v3.1:free'
+  deepseek: {
+    apiKey,
+    baseUrl: raw.deepseek?.baseUrl || 'https://api.deepseek.com',
+    model: raw.deepseek?.model || 'deepseek-chat'
   },
   maxFolderDepth: raw.maxFolderDepth ?? 4,
   ignoredExtensions: raw.ignoredExtensions ?? ['.crdownload', '.tmp', '.part', '.download'],

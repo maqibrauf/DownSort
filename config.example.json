@@ -5,9 +5,8 @@
     { "name": "ProjectA", "path": "C:\\Users\\barbo\\projects\\project-a\\docs" }
   ],
 
-  "openrouter": {
-    "apiKey": "sk-or-...",
-    "model": "deepseek/deepseek-chat-v3.1:free"
+  "deepseek": {
+    "model": "deepseek-chat"
   },
 
   "maxFolderDepth": 4,

@@ -1,8 +1,6 @@
 import { config } from './config.js';
 import { logError } from './logger.js';
 
-const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
-
 /**
  * Asks the LLM to pick the best-matching folder for a file, from the given taxonomy.
  * Returns { label, absPath } on a confident match, or null if no good match / on error.
@@ -21,14 +19,14 @@ Respond with ONLY a JSON object, no markdown, no explanation: {"folder": "<exact
 
   let response;
   try {
-    response = await fetch(API_URL, {
+    response = await fetch(`${config.deepseek.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${config.openrouter.apiKey}`,
+        Authorization: `Bearer ${config.deepseek.apiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: config.openrouter.model,
+        model: config.deepseek.model,
         temperature: 0,
         messages: [
           { role: 'system', content: systemPrompt },
@@ -37,19 +35,19 @@ Respond with ONLY a JSON object, no markdown, no explanation: {"folder": "<exact
       })
     });
   } catch (err) {
-    logError('OpenRouter request failed:', err.message);
+    logError('DeepSeek request failed:', err.message);
     return null;
   }
 
   if (!response.ok) {
-    logError('OpenRouter returned', response.status, await response.text().catch(() => ''));
+    logError('DeepSeek returned', response.status, await response.text().catch(() => ''));
     return null;
   }
 
   const data = await response.json().catch(() => null);
   const content = data?.choices?.[0]?.message?.content;
   if (!content) {
-    logError('OpenRouter response had no content:', JSON.stringify(data));
+    logError('DeepSeek response had no content:', JSON.stringify(data));
     return null;
   }
 

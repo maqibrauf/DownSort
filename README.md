@@ -1,7 +1,7 @@
 # DownSort
 
-Watches your Downloads folder. When a new file lands, it asks a free LLM
-(via OpenRouter) which of your existing project folders it belongs in, then
+Watches your Downloads folder. When a new file lands, it asks DeepSeek's
+free-tier LLM which of your existing project folders it belongs in, then
 shows a Windows toast notification with **Accept**/**Reject** buttons before
 moving anything. Nothing is moved without your confirmation.
 
@@ -13,7 +13,18 @@ moving anything. Nothing is moved without your confirmation.
    npm install
    ```
 
-2. Copy the config template and fill it in:
+2. Set your DeepSeek API key as a **persistent** environment variable (not
+   just `$env:...` in the current shell — that won't be visible to the
+   background task at logon):
+
+   ```powershell
+   setx DEEPSEEK_API_KEY "your-key-here"
+   ```
+
+   Close and reopen your terminal afterwards so it picks up the new value.
+   Get a free key at https://platform.deepseek.com/api_keys.
+
+3. Copy the config template and fill it in:
 
    ```powershell
    cp config.example.json config.json
@@ -23,16 +34,15 @@ moving anything. Nothing is moved without your confirmation.
    - `targets`: a list of `{ "name": "...", "path": "..." }` — the project
      folders (e.g. a Next.js project's `docs` folder) you want files sorted
      into. Add as many as you like.
-   - `openrouter.apiKey`: get a free key at https://openrouter.ai/keys.
-     The default model (`deepseek/deepseek-chat-v3.1:free`) is free to use.
+   - `deepseek.model` (optional): defaults to `deepseek-chat`.
 
-3. (Optional) Sweep files already sitting in Downloads:
+4. (Optional) Sweep files already sitting in Downloads:
 
    ```powershell
    npm run once
    ```
 
-4. Register it to run automatically in the background at every login
+5. Register it to run automatically in the background at every login
    (no console window, no need to start it manually):
 
    ```powershell
