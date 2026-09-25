@@ -94,6 +94,13 @@ export async function processFile(filePath) {
   const match = result.folder;
   const decision = await confirmMove(fileName, match.label);
 
+  if (decision === 'timeout') {
+    // You just didn't get to it in time — ask again next run instead of giving up forever.
+    log(`No response for "${fileName}" -> ${match.label} (notification timed out), will ask again next run.`);
+    recordHistory({ file: fileName, from: filePath, suggested: match.label, decision });
+    return;
+  }
+
   if (decision !== 'accept') {
     log(`Suggestion for "${fileName}" -> ${match.label} was ${decision}.`);
     markSeen(filePath, stat.size, stat.mtimeMs, decision);

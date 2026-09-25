@@ -11,7 +11,7 @@ export function confirmMove(fileName, folderLabel) {
         title: 'DownSort',
         message: `${fileName}\n→ ${folderLabel}`,
         wait: true,
-        timeout: 30,
+        timeout: 120,
         actions: ['Accept', 'Reject']
       },
       (err, response) => {
