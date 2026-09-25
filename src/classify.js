@@ -10,21 +10,21 @@ function sleep(ms) {
 }
 
 function isRetryableStatus(status) {
-  // 429 is deliberately excluded: OpenRouter's free tier often runs on a daily quota, not a
-  // per-minute one, so retrying the same model within seconds just burns more of that quota
-  // for no chance of success. Move to the next configured model instead (see attemptModel).
+  // 429 is deliberately excluded: each Groq model has its own separate rate limit, so if one
+  // is hit, retrying the same model won't help — move to the next configured model instead
+  // (see attemptModel), which has its own independent quota.
   return status >= 500;
 }
 
-async function callOpenRouter(model, systemPrompt, userPrompt) {
+async function callGroq(model, systemPrompt, userPrompt) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    return await fetch(`${config.openrouter.baseUrl}/chat/completions`, {
+    return await fetch(`${config.groq.baseUrl}/chat/completions`, {
       method: 'POST',
       signal: controller.signal,
       headers: {
-        Authorization: `Bearer ${config.openrouter.apiKey}`,
+        Authorization: `Bearer ${config.groq.apiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -51,17 +51,17 @@ async function attemptModel(model, systemPrompt, userPrompt) {
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
-      response = await callOpenRouter(model, systemPrompt, userPrompt);
+      response = await callGroq(model, systemPrompt, userPrompt);
     } catch (err) {
       lastError = err.message;
-      logError(`OpenRouter request failed (${model}, attempt ${attempt}/${MAX_ATTEMPTS}):`, lastError);
+      logError(`Groq request failed (${model}, attempt ${attempt}/${MAX_ATTEMPTS}):`, lastError);
       response = null;
     }
 
     if (response?.ok) return { outcome: 'ok', response };
 
     if (response?.status === 404) {
-      // Free-tier models get deprecated/rotated often — move on to the next configured model.
+      // Model deprecated/renamed — move on to the next configured model.
       const body = await response.text().catch(() => '');
       log(`Model "${model}" is unavailable (404), trying next configured model. ${body}`);
       return { outcome: 'model-unavailable' };
@@ -75,13 +75,13 @@ async function attemptModel(model, systemPrompt, userPrompt) {
 
     if (response && !isRetryableStatus(response.status)) {
       const body = await response.text().catch(() => '');
-      logError('OpenRouter returned non-retryable status', response.status, body);
+      logError('Groq returned non-retryable status', response.status, body);
       return { outcome: 'error', reason: `http_${response.status}` };
     }
 
     if (response) {
       lastError = `http_${response.status}`;
-      logError(`OpenRouter returned ${response.status} (${model}, attempt ${attempt}/${MAX_ATTEMPTS}), will retry if attempts remain.`);
+      logError(`Groq returned ${response.status} (${model}, attempt ${attempt}/${MAX_ATTEMPTS}), will retry if attempts remain.`);
     }
 
     if (attempt < MAX_ATTEMPTS) {
@@ -94,8 +94,8 @@ async function attemptModel(model, systemPrompt, userPrompt) {
 
 /**
  * Asks the LLM to pick the best-matching folder for a file, from the given taxonomy.
- * Tries each model in config.openrouter.models in order, moving to the next one whenever
- * one is deprecated/unavailable-for-free (404), so a single OpenRouter free-tier rotation
+ * Tries each model in config.groq.models in order, moving to the next one whenever
+ * one is deprecated/unavailable (404) or rate-limited (429), so a single model issue
  * doesn't stall the whole pipeline.
  *
  * Returns a discriminated result:
@@ -119,7 +119,7 @@ Respond with ONLY a JSON object, no markdown, no explanation: {"folder": "<exact
 
   let lastReason = 'no_models_configured';
 
-  for (const model of config.openrouter.models) {
+  for (const model of config.groq.models) {
     const attempt = await attemptModel(model, systemPrompt, userPrompt);
 
     if (attempt.outcome === 'model-unavailable') {
@@ -138,7 +138,7 @@ Respond with ONLY a JSON object, no markdown, no explanation: {"folder": "<exact
     const data = await attempt.response.json().catch(() => null);
     const content = data?.choices?.[0]?.message?.content;
     if (!content) {
-      logError('OpenRouter response had no content:', JSON.stringify(data));
+      logError('Groq response had no content:', JSON.stringify(data));
       return { status: 'error', reason: 'empty_response' };
     }
 

@@ -24,35 +24,29 @@ if (!Array.isArray(raw.targets) || raw.targets.length === 0) {
   );
   process.exit(1);
 }
-const apiKey = process.env.OPENROUTER_API_KEY;
+const apiKey = process.env.GROQ_API_KEY;
 if (!apiKey) {
   console.error(
-    'Missing OPENROUTER_API_KEY environment variable. Get a free key at https://openrouter.ai/keys, ' +
-      'then set it (e.g. `setx OPENROUTER_API_KEY "..."` in PowerShell, then reopen your terminal).'
+    'Missing GROQ_API_KEY environment variable. Get a free key at https://console.groq.com/keys, ' +
+      'then set it (e.g. `setx GROQ_API_KEY "..."` in PowerShell, then reopen your terminal).'
   );
   process.exit(1);
 }
 
-// OpenRouter's free-tier model lineup rotates/gets deprecated fairly often. If you hit a
-// "unavailable for free" 404 for all of these, check https://openrouter.ai/models?max_price=0
-// for what's currently live and update this list (or your config.json's "openrouter.models").
-const DEFAULT_FREE_MODELS = [
-  'z-ai/glm-5.2:free',
-  'google/gemma-4-31b-it:free',
-  'nvidia/nemotron-3-super-120b-a12b:free',
-  'qwen/qwen3.8-27b:free',
-  'nex-agi/nex-n2.5-pro:free'
-];
+// Groq occasionally deprecates/renames models too. If you hit "unavailable" for all of
+// these, check https://console.groq.com/docs/models for what's currently live and update
+// this list (or your config.json's "groq.models").
+const DEFAULT_FREE_MODELS = ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'gemma2-9b-it'];
 
-const configuredModels = raw.openrouter?.models ?? (raw.openrouter?.model ? [raw.openrouter.model] : undefined);
+const configuredModels = raw.groq?.models ?? (raw.groq?.model ? [raw.groq.model] : undefined);
 
 export const config = {
   downloadsPath: raw.downloadsPath,
   targets: raw.targets,
-  openrouter: {
+  groq: {
     apiKey,
-    baseUrl: raw.openrouter?.baseUrl || 'https://openrouter.ai/api/v1',
-    // Tried in order; if one is deprecated/unavailable-for-free, the next is tried automatically.
+    baseUrl: raw.groq?.baseUrl || 'https://api.groq.com/openai/v1',
+    // Tried in order; if one is deprecated/unavailable, the next is tried automatically.
     models: Array.isArray(configuredModels) && configuredModels.length > 0 ? configuredModels : DEFAULT_FREE_MODELS
   },
   maxFolderDepth: raw.maxFolderDepth ?? 4,
