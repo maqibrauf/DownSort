@@ -19,11 +19,17 @@ export function confirmMove(fileName, folderLabel) {
           resolve('timeout');
           return;
         }
-        if (response === 'Accept' || response === 'activate') {
+        // node-notifier lowercases/sanitizes the button label before handing it back here
+        // (see its actionJackerDecorator), so match against the actual button text — not
+        // the capitalized labels we passed in via `actions` above.
+        const normalized = String(response || '').toLowerCase().trim();
+        if (normalized === 'accept') {
           resolve('accept');
-        } else if (response === 'Reject') {
+        } else if (normalized === 'reject') {
           resolve('reject');
         } else {
+          // Covers dismissed / clicked-body / timed-out / anything unrecognized — none of
+          // these are an explicit decision, so treat them all as "ask again later".
           resolve('timeout');
         }
       }
