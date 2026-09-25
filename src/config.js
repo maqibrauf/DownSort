@@ -36,7 +36,7 @@ if (!apiKey) {
 // Groq occasionally deprecates/renames models too. If you hit "unavailable" for all of
 // these, check https://console.groq.com/docs/models for what's currently live and update
 // this list (or your config.json's "groq.models").
-const DEFAULT_FREE_MODELS = ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'gemma2-9b-it'];
+const DEFAULT_FREE_MODELS = ['openai/gpt-oss-20b', 'openai/gpt-oss-120b', 'qwen/qwen3.8-27b', 'allam-2-7b'];
 
 const configuredModels = raw.groq?.models ?? (raw.groq?.model ? [raw.groq.model] : undefined);
 
